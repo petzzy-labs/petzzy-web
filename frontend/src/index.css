@@ -98,8 +98,17 @@ h1,h2,h3,h4 { font-family: 'Cabinet Grotesk', 'Satoshi', sans-serif; letter-spac
   background: var(--pz-bg-2);
   border: 1px solid var(--pz-border);
   border-radius: 16px;
+  transition: transform .25s ease, border-color .2s ease, box-shadow .25s ease, background-color .2s ease;
 }
-.pz-card:hover { border-color: rgba(144,238,144,0.35); }
+.pz-card:hover { border-color: rgba(144,238,144,0.30); }
+
+.pz-card-hoverable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(144,238,144,0.30);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(144,238,144,0.15);
+  background: rgba(18,36,25,0.85);
+}
+.pz-card-hoverable:active { transform: scale(0.97); }
 
 .pz-btn-primary {
   background: var(--pz-brand);
@@ -107,19 +116,23 @@ h1,h2,h3,h4 { font-family: 'Cabinet Grotesk', 'Satoshi', sans-serif; letter-spac
   border-radius: 9999px;
   padding: 12px 22px;
   font-weight: 700;
-  transition: transform .18s ease, background-color .18s ease;
+  transition: transform .18s ease, background-color .2s ease, box-shadow .2s ease;
 }
-.pz-btn-primary:hover { background:#B6F5B6; transform: translateY(-1px); }
-.pz-btn-primary:active { transform: translateY(0) scale(.98); }
+.pz-btn-primary:hover { background:#B6F5B6; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(144,238,144,0.25); }
+.pz-btn-primary:active { transform: translateY(0) scale(0.95); }
 
 .pz-btn-ghost {
   border: 1px solid var(--pz-border);
   color: var(--pz-fg);
   border-radius: 9999px;
   padding: 12px 22px;
-  transition: border-color .18s, color .18s, background-color .18s;
+  transition: border-color .2s, color .2s, background-color .2s, transform .18s ease;
 }
-.pz-btn-ghost:hover { border-color: var(--pz-brand); color: var(--pz-brand); background: rgba(144,238,144,0.06); }
+.pz-btn-ghost:hover { border-color: var(--pz-brand); color: var(--pz-brand); background: rgba(144,238,144,0.08); }
+.pz-btn-ghost:active { transform: scale(0.95); }
+
+/* Any element with data-testid ending in -btn or role=button gets press feedback */
+button:active, a.pz-btn-primary:active, a.pz-btn-ghost:active { transform: scale(0.95); }
 
 .pz-chip {
   display:inline-flex; align-items:center; gap:6px;

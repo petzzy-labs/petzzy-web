@@ -36,6 +36,7 @@ export const Navbar = () => {
           <NavLink to="/about" label="About Us" testId="nav-about" />
           <NavLink to="/map" label="Live Map" testId="nav-map" />
           <NavLink to="/sponsors" label="Sponsors" testId="nav-sponsors" />
+          <NavLink to="/donate" label="Donate" testId="nav-donate" />
           <a href="/#tech" data-testid="nav-tech" className="text-sm text-neutral-300 hover:text-[#90EE90]">Tech</a>
         </nav>
 
@@ -85,6 +86,7 @@ export const Navbar = () => {
             <NavLink to="/about" label="About Us" testId="nav-about-m" onClick={() => setOpen(false)} />
             <NavLink to="/map" label="Live Map" testId="nav-map-m" onClick={() => setOpen(false)} />
             <NavLink to="/sponsors" label="Sponsors" testId="nav-sponsors-m" onClick={() => setOpen(false)} />
+            <NavLink to="/donate" label="Donate" testId="nav-donate-m" onClick={() => setOpen(false)} />
             <a href="/#tech" data-testid="nav-tech-m" onClick={() => setOpen(false)} className="text-sm text-neutral-300 hover:text-[#90EE90]">Tech</a>
 
             <div className="h-px bg-[#1B3324] my-1" />

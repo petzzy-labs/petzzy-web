@@ -1,4 +1,4 @@
-"""Regression tests for PETZZY sponsors, alerts, RBAC, and existing admin operations."""
+"""Regression tests for PETZZY donations, sponsors, alerts, RBAC, auth, and admin operations."""
 
 import os
 import re
@@ -66,6 +66,36 @@ def regular_client():
     assert body["user"]["role"] == "user"
     session.headers.update({"Authorization": f"Bearer {body['token']}"})
     return session
+
+
+@pytest.fixture(scope="session")
+def pending_donation(client):
+    """Create one Stripe test checkout and remove only its Mongo test record after validation."""
+    payload = {
+        "package_id": "pellet_1kg",
+        "origin_url": BASE_URL,
+        "donor_name": "TEST Donation QA",
+        "donor_email": "test-donation@example.test",
+    }
+    response = client.post(f"{API}/donations/checkout", json=payload, timeout=45)
+    if response.status_code != 200:
+        pytest.fail(f"Stripe checkout creation failed: {response.status_code} {response.text[:500]}")
+    body = response.json()
+    session_id = body.get("session_id")
+    assert isinstance(session_id, str) and session_id.startswith("cs_test_")
+    assert isinstance(body.get("checkout_url"), str)
+    assert body["checkout_url"].startswith("https://checkout.stripe.com/")
+    yield {**body, "payload": payload}
+
+    from pymongo import MongoClient
+
+    backend_env = dotenv_values("/app/backend/.env")
+    mongo = MongoClient(backend_env["MONGO_URL"])
+    try:
+        mongo[backend_env["DB_NAME"]].donations.delete_one({"session_id": session_id})
+    finally:
+        mongo.close()
+
 
 
 class TestPublicSponsors:
@@ -263,3 +293,115 @@ class TestAuthSecurityPlaybook:
         statuses = [client.post(f"{API}/auth/login", json=payload, timeout=20).status_code for _ in range(6)]
         assert statuses[:5] == [401] * 5
         assert statuses[5] == 429
+
+
+
+class TestDonations:
+    """Donation packages, Stripe checkout persistence/status, statistics, webhook, and RBAC."""
+
+    def test_packages_are_complete(self, client):
+        response = client.get(f"{API}/donations/packages", timeout=20)
+        assert response.status_code == 200
+        packages = response.json()
+        assert isinstance(packages, list) and len(packages) == 4
+        by_id = {p["package_id"]: p for p in packages}
+        assert set(by_id) == {"pellet_1kg", "pellet_5kg", "pellet_10kg", "bin_sponsor"}
+        expected = {
+            "pellet_1kg": (50.0, "inr", 1, "1 kg pellets"),
+            "pellet_5kg": (200.0, "inr", 5, "5 kg pellets"),
+            "pellet_10kg": (350.0, "inr", 10, "10 kg pellets"),
+            "bin_sponsor": (5000.0, "inr", 200, "Sponsor a full bin for a month"),
+        }
+        for package_id, values in expected.items():
+            package = by_id[package_id]
+            assert (package["amount"], package["currency"], package["kg"], package["label"]) == values
+
+    def test_invalid_package_is_rejected(self, client):
+        response = client.post(
+            f"{API}/donations/checkout",
+            json={"package_id": "TEST_unknown", "origin_url": BASE_URL},
+            timeout=20,
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Unknown package"
+
+    def test_checkout_persists_initiated_pending_record(self, pending_donation):
+        from pymongo import MongoClient
+
+        backend_env = dotenv_values("/app/backend/.env")
+        mongo = MongoClient(backend_env["MONGO_URL"])
+        try:
+            record = mongo[backend_env["DB_NAME"]].donations.find_one(
+                {"session_id": pending_donation["session_id"]}
+            )
+            assert record is not None
+            assert record["package_id"] == "pellet_1kg"
+            assert record["amount"] == 50.0
+            assert record["currency"] == "inr"
+            assert record["pellets_kg"] == 1
+            assert record["donor_name"] == "TEST Donation QA"
+            assert record["donor_email"] == "test-donation@example.test"
+            assert record["status"] == "initiated"
+            assert record["payment_status"] == "pending"
+        finally:
+            mongo.close()
+
+    def test_pending_status_polls_through_to_stripe(self, client, pending_donation):
+        response = client.get(
+            f"{API}/donations/status/{pending_donation['session_id']}", timeout=45
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body == {
+            "session_id": pending_donation["session_id"],
+            "status": "initiated",
+            "payment_status": "pending",
+            "amount": 50.0,
+            "currency": "inr",
+            "pellets_kg": 1,
+        }
+
+    def test_unknown_status_is_404(self, client):
+        response = client.get(f"{API}/donations/status/cs_test_TEST_missing", timeout=20)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Donation not found"
+
+    def test_stats_shape_and_values(self, client):
+        response = client.get(f"{API}/donations/stats", timeout=20)
+        assert response.status_code == 200
+        body = response.json()
+        assert set(body) == {"donations_count", "total_amount", "total_pellets_kg", "currency"}
+        assert isinstance(body["donations_count"], int) and body["donations_count"] >= 0
+        assert isinstance(body["total_amount"], (int, float)) and body["total_amount"] >= 0
+        assert isinstance(body["total_pellets_kg"], (int, float)) and body["total_pellets_kg"] >= 0
+        assert body["currency"] == "INR"
+
+    def test_admin_donations_rbac_and_record(self, regular_client, admin_client, pending_donation):
+        denied = regular_client.get(f"{API}/admin/donations", timeout=20)
+        assert denied.status_code == 403
+        assert denied.json()["detail"] == "Admin only"
+
+        allowed = admin_client.get(f"{API}/admin/donations", timeout=20)
+        assert allowed.status_code == 200
+        records = allowed.json()
+        assert isinstance(records, list)
+        record = next(d for d in records if d["session_id"] == pending_donation["session_id"])
+        assert record["status"] == "initiated"
+        assert record["payment_status"] == "pending"
+        assert "_id" not in record
+
+
+    def test_admin_donations_without_token_is_forbidden(self):
+        response = requests.get(f"{API}/admin/donations", timeout=20)
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Admin only"
+
+    def test_webhook_rejects_invalid_signature(self, client):
+        response = client.post(
+            f"{API}/webhook/stripe",
+            data=b"{}",
+            headers={"Content-Type": "application/json", "Stripe-Signature": "TEST_invalid"},
+            timeout=30,
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid webhook"

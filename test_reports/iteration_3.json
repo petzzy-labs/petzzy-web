@@ -1,0 +1,78 @@
+{
+  "summary": "Tested Stripe donation APIs and persistence, unpaid Stripe poll-through, donation UI/redirect/polling/cancel flows, Framer Motion reveals/transitions, sticky glass navbar, desktop/mobile navigation, and map/sponsor/login/admin regressions. Core donation and animation flows work. Full backend suite: 21/24 passed; failures are anonymous admin-donations status mismatch plus existing CORS and brute-force defects. Frontend defects: feature cards do not lift on hover, and donation-package load failures are silently hidden.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "No brute-force lockout: six invalid logins return 401; attempt six should return 429 after five failures.",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "/api/",
+        "issue": "Credentialed CORS still permits an arbitrary Origin and returns Access-Control-Allow-Origin: * with Access-Control-Allow-Credentials: true.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/admin/donations",
+        "issue": "Anonymous request returns 401 Not authenticated, while the requested contract specifies 403 without an admin token. A regular-user token correctly returns 403, and an admin token correctly returns the donation array."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Landing feature cards",
+        "issue": "Hover changes the border to green but does not apply translateY(-2px); computed transform remains none.",
+        "selector": "[data-testid='feat-ai'], [data-testid^='feat-']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Donate package loading",
+        "issue": "When GET /api/donations/packages returns 500, the page silently renders zero package cards, shows no error/retry state, and leaves Continue to Stripe enabled with the hidden default package selection.",
+        "affected_selectors": ["[data-testid='donate-packages']", "[data-testid='donate-checkout']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/donations_results.xml"
+  ],
+  "action_items": [
+    "Move feature-card hover lift into Framer Motion (for example whileHover={{ y: -2 }}) or otherwise avoid the motion element's inline transform overriding the CSS hover transform.",
+    "Add loading, visible error, and retry states for donation packages; disable checkout until a package response succeeds.",
+    "Align anonymous /api/admin/donations behavior with the requested 403 contract, or explicitly revise the contract to standard 401 for unauthenticated and 403 for authenticated non-admin users.",
+    "Add failed-login tracking/rate limiting and return 429 after five failures.",
+    "Configure an explicit CORS origin allowlist when allow_credentials is enabled.",
+    "Validate donation origin_url against an environment-configured frontend allowlist and use Pydantic URL/email types; do not accept an arbitrary redirect origin."
+  ],
+  "critical_code_review_comments": [
+    "StaggerItem is a motion.div and Framer Motion leaves an inline transform:none after reveal; this has higher priority than .pz-card-hoverable:hover { transform: translateY(-2px) }, causing the reproduced hover-lift failure.",
+    "Donate.jsx swallows package/stats API failures with empty catch handlers. The checkout remains actionable even when no package was loaded.",
+    "DonateIn declares origin_url and donor_email as unrestricted strings. origin_url is directly used for Stripe success/cancel redirects, creating an open-redirect risk; validate against configured application origins and use AnyHttpUrl/EmailStr.",
+    "STRIPE_API_KEY and ADMIN_PASSWORD have hardcoded fallback values. Credentials should be required from environment variables and fail fast when missing.",
+    "Public checkout creation has no request throttling, allowing unbounded Stripe test-session and Mongo record creation.",
+    "server.py is 776 lines and should be split into focused auth, donations, sponsors, bins, and admin modules.",
+    "Donation package cards use role=button without tabIndex or keyboard handlers, so they are not keyboard-equivalent controls."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/frontend/src/pages/DonateCancel.jsx",
+    "/app/frontend/src/pages/DonateSuccess.jsx",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {
+    "backend": "87.5% (21/24 overall; core donation creation/status/stats/webhook/persistence passed)",
+    "frontend": "90%"
+  },
+  "seed_data_creation": "Created Stripe test checkout sessions for backend and UI redirect/polling verification without completing payment. All TEST donation Mongo records were deleted; no payment was completed.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Donation packages, invalid package 400, checkout URL/session prefixes, initiated/pending Mongo persistence, Stripe pending poll-through (with no Stripe status warning in backend logs), stats, admin-token list, regular-user 403, and invalid webhook signature 400 passed. UI verified 4 cards, default 5kg, selection change, POST payload, Stripe redirect target, unpaid polling attempt 1 to 2, cancel actions, mobile/desktop Donate links, sticky frosted navbar, 1.05-to-1 image reveals, upward feature re-trigger/stagger, active/hover button feedback, and route exit/enter animation. /map, sponsors/detail, login, and admin regressions passed. Added test IDs only to donate success/cancel actions.",
+  "rca_of_the_issue": "Feature lift fails because Framer Motion owns the inline transform on the same element, overriding CSS hover transform. Donation outage UX fails because both package and stats promises use catch(() => {}) and no loading/error state gates checkout. Anonymous admin donations returns 401 in get_current_user before require_admin can return 403. CORS and lockout failures remain caused by wildcard CORS configuration and absent failed-attempt tracking."
+}

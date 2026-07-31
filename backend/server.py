@@ -20,6 +20,9 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from openpyxl import Workbook
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse,
+)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -33,6 +36,16 @@ EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "PETZZY Ops")
 OPS_EMAIL = os.environ.get("OPS_EMAIL", "ops@petzzy.com")
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 BIN_FULL_THRESHOLD = 90.0
+
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
+
+# Server-side donation packages (INR) — never trust amounts from the client.
+DONATION_PACKAGES = {
+    "pellet_1kg":  {"amount": 50.0,  "currency": "inr", "kg": 1,  "label": "1 kg pellets"},
+    "pellet_5kg":  {"amount": 200.0, "currency": "inr", "kg": 5,  "label": "5 kg pellets"},
+    "pellet_10kg": {"amount": 350.0, "currency": "inr", "kg": 10, "label": "10 kg pellets"},
+    "bin_sponsor": {"amount": 5000.0,"currency": "inr", "kg": 200,"label": "Sponsor a full bin for a month"},
+}
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -450,8 +463,135 @@ async def check_bin_alerts(_: dict = Depends(require_admin)):
 
 
 # ---------------------------------------------------------------------------
-# Seeding
+# Donations (Stripe via emergentintegrations, BYOK Flow B)
 # ---------------------------------------------------------------------------
+class DonateIn(BaseModel):
+    package_id: str
+    origin_url: str
+    donor_name: Optional[str] = ""
+    donor_email: Optional[str] = ""
+
+@api.get("/donations/packages")
+async def donation_packages():
+    return [{"package_id": k, **v} for k, v in DONATION_PACKAGES.items()]
+
+@api.post("/donations/checkout")
+async def donation_checkout(body: DonateIn, request: Request):
+    pkg = DONATION_PACKAGES.get(body.package_id)
+    if not pkg:
+        raise HTTPException(status_code=400, detail="Unknown package")
+
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    origin = body.origin_url.rstrip("/")
+    success_url = f"{origin}/donate/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/donate/cancel"
+
+    req = CheckoutSessionRequest(
+        amount=float(pkg["amount"]),
+        currency=pkg["currency"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "package_id": body.package_id,
+            "pellets_kg": str(pkg["kg"]),
+            "donor_name": body.donor_name or "",
+            "donor_email": body.donor_email or "",
+        },
+    )
+    session = await checkout.create_checkout_session(req)
+
+    await db.donations.insert_one({
+        "session_id": session.session_id,
+        "package_id": body.package_id,
+        "amount": float(pkg["amount"]),
+        "currency": pkg["currency"],
+        "pellets_kg": pkg["kg"],
+        "donor_name": body.donor_name or "",
+        "donor_email": (body.donor_email or "").lower(),
+        "status": "initiated",
+        "payment_status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {"checkout_url": session.url, "session_id": session.session_id}
+
+@api.get("/donations/status/{session_id}")
+async def donation_status(session_id: str):
+    record = await db.donations.find_one({"session_id": session_id}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="Donation not found")
+
+    # Poll-through: if still pending, ask Stripe directly (webhook can lag).
+    if record.get("payment_status") != "paid":
+        try:
+            checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
+            status: CheckoutStatusResponse = await checkout.get_checkout_status(session_id)
+            if status.payment_status == "paid" or status.status == "complete":
+                await db.donations.update_one(
+                    {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+                    {"$set": {
+                        "status": "completed",
+                        "payment_status": "paid",
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                record = await db.donations.find_one({"session_id": session_id}, {"_id": 0})
+        except Exception as e:
+            logger.warning("Stripe status check failed: %s", e)
+
+    return {
+        "session_id": record["session_id"],
+        "status": record["status"],
+        "payment_status": record["payment_status"],
+        "amount": record.get("amount"),
+        "currency": record.get("currency"),
+        "pellets_kg": record.get("pellets_kg"),
+    }
+
+@api.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body_bytes = await request.body()
+    signature = request.headers.get("Stripe-Signature", "")
+    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
+    try:
+        event = await checkout.handle_webhook(body_bytes, signature)
+    except Exception as e:
+        logger.error("Webhook error: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid webhook")
+
+    sid = event.session_id
+    if event.payment_status == "paid":
+        await db.donations.update_one(
+            {"session_id": sid, "payment_status": {"$ne": "paid"}},
+            {"$set": {
+                "status": "completed",
+                "payment_status": "paid",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+    return {"status": "ok"}
+
+@api.get("/donations/stats")
+async def donations_stats():
+    docs = await db.donations.find({"payment_status": "paid"}, {"_id": 0}).to_list(2000)
+    total_amount = sum(d.get("amount", 0) for d in docs)
+    total_kg = sum(d.get("pellets_kg", 0) for d in docs)
+    return {
+        "donations_count": len(docs),
+        "total_amount": round(total_amount, 2),
+        "total_pellets_kg": total_kg,
+        "currency": "INR",
+    }
+
+@api.get("/admin/donations")
+async def admin_donations(_: dict = Depends(require_admin)):
+    return await db.donations.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
 CHENNAI_BINS = [
     ("PZ-001", "T. Nagar Market", 13.0418, 80.2337),
     ("PZ-002", "Marina Beach", 13.0500, 80.2824),
