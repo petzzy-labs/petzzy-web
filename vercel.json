@@ -1,9 +1,10 @@
 {
+  "installCommand": "npm install --legacy-peer-deps",
   "services": {
     "frontend": {
       "root": "frontend"
     },
-  "backend": {
+    "backend": {
       "root": "backend",
       "entrypoint": "server:app"
     }
