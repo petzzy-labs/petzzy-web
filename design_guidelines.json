@@ -1,0 +1,155 @@
+{
+  "project_name": "PETZZY",
+  "theme_strategy": "Dark mode primary to enhance the futuristic 'Godly-level' AI/IoT Dashboard feel, while grounding the aesthetics with organic, earthy undertones (Deep Forest/Moss) to represent the environmental/animal welfare mission. The required brand color #90EE90 (Petzzy Green) will act as an electric, glowing accent for primary actions, live indicators, and data visualizations.",
+  "typography": {
+    "primary_heading": "Cabinet Grotesk",
+    "secondary_heading": "Cabinet Grotesk",
+    "body": "Satoshi",
+    "monospace": "JetBrains Mono",
+    "rules": [
+      "Import fonts via Google Fonts or Fontshare.",
+      "Headings (Cabinet Grotesk) must use tight tracking (`tracking-tight` or `tracking-tighter`).",
+      "Overlines and small labels must be Uppercase, Tiny, and Wide Spacing (`tracking-[0.2em]`).",
+      "Do NOT use Inter, Roboto, or Open Sans for headings."
+    ]
+  },
+  "colors": {
+    "brand_primary": "#90EE90",
+    "dark_mode": {
+      "background": "#0A140E",
+      "foreground": "#F9F9F6",
+      "card": "#122419",
+      "card_foreground": "#F9F9F6",
+      "popover": "#122419",
+      "popover_foreground": "#F9F9F6",
+      "primary": "#90EE90",
+      "primary_foreground": "#0A140E",
+      "secondary": "#1B3324",
+      "secondary_foreground": "#90EE90",
+      "muted": "#1B3324",
+      "muted_foreground": "#A3B8AA",
+      "accent": "#1B3324",
+      "accent_foreground": "#90EE90",
+      "destructive": "#FF453A",
+      "destructive_foreground": "#FFFFFF",
+      "border": "#1B3324",
+      "input": "#1B3324",
+      "ring": "#90EE90"
+    },
+    "light_mode": {
+      "background": "#F9F9F6",
+      "foreground": "#0A140E",
+      "card": "#FFFFFF",
+      "card_foreground": "#0A140E",
+      "popover": "#FFFFFF",
+      "popover_foreground": "#0A140E",
+      "primary": "#1A8A3A",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#E5EBE7",
+      "secondary_foreground": "#1A8A3A",
+      "muted": "#E5EBE7",
+      "muted_foreground": "#5C7364",
+      "accent": "#E5EBE7",
+      "accent_foreground": "#1A8A3A",
+      "destructive": "#DD2C23",
+      "destructive_foreground": "#FFFFFF",
+      "border": "#D1DDD5",
+      "input": "#D1DDD5",
+      "ring": "#1A8A3A"
+    },
+    "rules": [
+      "CRITICAL: The brand primary is #90EE90. When used as a background for buttons or badges, text inside MUST be dark (e.g., #0A140E) for WCAG AA contrast compliance.",
+      "Avoid pure black (#000000). Use the specified dark green-tinted blacks."
+    ]
+  },
+  "surfaces": {
+    "headers": "Use 'Crystal Glass' - `backdrop-blur-xl bg-[#0A140E]/70` with a 1px delicate bottom border (`border-[#1B3324]`). Never use fully transparent.",
+    "dashboard_cards": "Flat solid background (`bg-card`) with a sharp 1px border (`border-border`). On hover, apply `-translate-y-1` and `shadow-lg`.",
+    "ai_camera_cards": "Use 'Grid Borders' or a subtle 'Tracing Beam' effect to signify active AI processing. Add a pulsing 'LIVE' green dot."
+  },
+  "spacing_and_layout": {
+    "marketing_pages": "Use the 'Bento Grid' (Mode A). Asymmetrical grids, wide gaps (`gap-8` to `gap-12`). Generous padding (`p-12`, `p-24`).",
+    "dashboard": "Use High-Density Grid (Mode B). Tight gaps (`gap-4` or `gap-6`). Utilize every pixel. Use `h-full` to stretch elements evenly.",
+    "general": [
+      "Use responsive layouts starting mobile-first.",
+      "Images must not exceed `max-h-[80vh]` on mobile."
+    ]
+  },
+  "pages_and_features": [
+    {
+      "name": "Landing Page",
+      "details": "Hero section with tagline 'PETZZY', About Us (mission/problem/team), How It Works/Tech (AI cameras, IoT, solar), and Contact. Use parallax scroll and rich bento-box layouts."
+    },
+    {
+      "name": "Auth (Login/Register)",
+      "details": "Split screen layout. One side has a large vertical image of puppies/dogs, the other side is the form. Include Google SSO button + JWT email/password form."
+    },
+    {
+      "name": "User Dashboard",
+      "details": "Leaflet + OSM map showing nearby bins. Stats on bin fill %. Live AI camera feeds (looping videos with CSS bounding boxes for 'dog/cat detected')."
+    },
+    {
+      "name": "Management/Admin Portal",
+      "details": "SaaS-like data density. Tables of registered users (with 'Download Excel' button), list of bins with GPS coords, food pellet levels, last-fed stats, sensor/battery health."
+    }
+  ],
+  "components": {
+    "buttons": "Pill-shaped or sharp rectangular. Primary button uses `#90EE90` background with dark text. Include `hover:scale-[1.02] active:scale-95 transition-transform`.",
+    "map": "Use `react-leaflet` with OpenStreetMap. Custom map markers styled with the PETZZY green color.",
+    "data_table": "Use shadcn/ui table. Must be dense, clean, and highly legible.",
+    "ai_camera_feed": "Simulated using standard HTML5 `<video autoPlay loop muted>`. Overlay absolutely positioned standard `div` elements with neon green borders to simulate AI object detection tracking boxes."
+  },
+  "media_and_assets": {
+    "images": [
+      {
+        "category": "Hero / About Us - Puppies",
+        "url": "https://images.unsplash.com/photo-1760210042929-70a2f7706363?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHw0fHxwdXBwaWVzJTIwcGxheWluZyUyMG91dGRvb3JzfGVufDB8fHx8MTc4NTQ3NTYyM3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Two puppies carrying a stick in a grassy field."
+      },
+      {
+        "category": "Auth / Marketing - Stray Dogs",
+        "url": "https://images.unsplash.com/photo-1721902187342-ab4e59f36d9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwyfHxzdHJheSUyMGRvZ3MlMjBzdHJlZXR8ZW58MHx8fHwxNzg1NDc1NjIzfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Dogs sitting on top of a pile of dirt - authentic street environment."
+      },
+      {
+        "category": "Tech / How It Works - Solar Panels",
+        "url": "https://images.unsplash.com/photo-1777571051052-6ad3c7031811?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHw0fHxzb2xhciUyMHBhbmVsJTIwZ3JlZW4lMjB0ZWNofGVufDB8fHx8MTc4NTQ3NTYyM3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Rooftops with solar panels."
+      }
+    ],
+    "icons": "Use `lucide-react` or `@phosphor-icons/react` for high-end duotone tech aesthetics."
+  },
+  "motion_and_interactions": {
+    "rules": [
+      "Apply staggered entrance animations to dashboard lists using `framer-motion`.",
+      "Hover states must alter both background color and text color explicitly.",
+      "Do NOT use universal `transition: all`. Target specific properties like `transition-transform`, `transition-colors`.",
+      "Add `data-testid` to ALL interactive and key informational elements."
+    ]
+  },
+  "libraries_and_packages": [
+    "react-router-dom",
+    "framer-motion",
+    "lucide-react",
+    "react-leaflet",
+    "leaflet",
+    "recharts (for dashboard analytics)",
+    "sonner (for toasts)",
+    "xlsx (for Excel download feature)",
+    "clsx",
+    "tailwind-merge"
+  ],
+  "universal_guidelines_for_main_agent": [
+    "You tend to converge toward generic outputs. Break the mold: create depth through layered design elements with z-index hierarchy and glassmorphism.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Do NOT apply universal transitions (`transition: all`).",
+    "Do NOT center align the app container (`.App { text-align: center; }`). Keep natural left-aligned reading flow.",
+    "Never use AI assistant emoji characters (🤖🧠💭) for icons.",
+    "Every interaction needs micro-animations (hover states, focus rings, subtle scale changes).",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Use Sonner for toast notifications.",
+    "For .js file environments, do not include TypeScript interfaces or type annotations in the code.",
+    "All interactive elements MUST have `data-testid` attributes (e.g., `data-testid=\"login-submit-button\"`).",
+    "Shadcn components use .js / .jsx format. Override rigid shadcn defaults to fit the organic/tech PETZZY theme."
+  ]
+}
