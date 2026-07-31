@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.458" timestamp="2026-07-31T06:24:33.177222+00:00" hostname="agent-env-a6fcdea8-778c-4107-a29e-ff534e947645"><testcase classname="tests.backend_test.TestExistingAdminRegression" name="test_exactly_ninety_percent_is_not_over_threshold" time="0.499"><failure message="AssertionError: assert 'PZ-010' not in ['PZ-010']">backend/tests/backend_test.py:212: in test_exactly_ninety_percent_is_not_over_threshold
+    assert "PZ-010" not in alerted_ids
+E   AssertionError: assert 'PZ-010' not in ['PZ-010']</failure></testcase></testsuite></testsuites>

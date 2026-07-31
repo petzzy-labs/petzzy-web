@@ -28,6 +28,11 @@ JWT_ALGORITHM = "HS256"
 JWT_SECRET = os.environ["JWT_SECRET"]
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@petzzy.com").lower()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "petzzyadmin123")
+EMERGENT_EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "PETZZY Ops")
+OPS_EMAIL = os.environ.get("OPS_EMAIL", "ops@petzzy.com")
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+BIN_FULL_THRESHOLD = 90.0
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -300,6 +305,151 @@ async def refill_bin(bin_id: str, body: BinRefillIn, _: dict = Depends(require_a
     return {"ok": True, "bin_id": bin_id, "pellets_added_kg": body.pellets_added_kg}
 
 # ---------------------------------------------------------------------------
+# Sponsors (public list/detail + admin CRUD)
+# ---------------------------------------------------------------------------
+class SponsorIn(BaseModel):
+    name: str
+    slug: str
+    tagline: str = ""
+    description: str = ""
+    logo_url: str = ""
+    hero_url: str = ""
+    website: str = ""
+    bin_ids: List[str] = Field(default_factory=list)
+
+@api.get("/sponsors")
+async def list_sponsors():
+    return await db.sponsors.find({}, {"_id": 0}).to_list(200)
+
+@api.get("/sponsors/{slug}")
+async def get_sponsor(slug: str):
+    sponsor = await db.sponsors.find_one({"slug": slug}, {"_id": 0})
+    if not sponsor:
+        raise HTTPException(status_code=404, detail="Sponsor not found")
+    bins = await db.bins.find({"bin_id": {"$in": sponsor.get("bin_ids", [])}}, {"_id": 0}).to_list(200)
+    impact = {
+        "bins_funded": len(bins),
+        "animals_fed_total": sum(b.get("animals_fed_today", 0) for b in bins) * 30,  # naive month projection
+        "waste_recycled_kg": round(sum(b.get("waste_recycled_kg", 0) for b in bins), 1),
+        "pellets_ready_kg": round(sum(b.get("pellets_kg", 0) for b in bins), 1),
+    }
+    return {"sponsor": sponsor, "bins": bins, "impact": impact}
+
+@api.post("/admin/sponsors")
+async def create_sponsor(body: SponsorIn, _: dict = Depends(require_admin)):
+    slug = body.slug.strip().lower()
+    if await db.sponsors.find_one({"slug": slug}):
+        raise HTTPException(status_code=400, detail="Slug already exists")
+    doc = body.model_dump()
+    doc["slug"] = slug
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.sponsors.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.delete("/admin/sponsors/{slug}")
+async def delete_sponsor(slug: str, _: dict = Depends(require_admin)):
+    result = await db.sponsors.delete_one({"slug": slug})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sponsor not found")
+    return {"ok": True}
+
+# ---------------------------------------------------------------------------
+# Email alerts (bin > 90% full) — Emergent-managed Resend
+# ---------------------------------------------------------------------------
+async def send_email(to_email: str, subject: str, html: str) -> dict:
+    if not EMERGENT_EMAIL_KEY:
+        logger.warning("EMERGENT_EMAIL_KEY not set — email to %s SIMULATED. Subject: %s", to_email, subject)
+        return {"status": "simulated", "recipient": to_email}
+    payload = {
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+        "from_name": EMAIL_FROM_NAME,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.post(
+                f"{EMAIL_BASE_URL}/api/v1/email/send",
+                headers={"X-Email-Key": EMERGENT_EMAIL_KEY},
+                json=payload,
+            )
+        r.raise_for_status()
+        return {"status": "sent", "recipient": to_email, "id": r.json().get("id")}
+    except Exception as e:
+        logger.error("Email send failed to %s: %s", to_email, e)
+        return {"status": "failed", "recipient": to_email, "error": str(e)}
+
+def _bin_alert_html(bin_doc: dict) -> str:
+    return f"""
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;background:#f4f6f5;padding:24px">
+      <tr><td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#0A140E;border-radius:16px;overflow:hidden;color:#F9F9F6">
+          <tr><td style="padding:28px 32px;border-bottom:1px solid #1B3324">
+            <div style="font-size:12px;letter-spacing:3px;color:#90EE90">PETZZY ALERT</div>
+            <div style="font-size:24px;font-weight:800;margin-top:6px">Bin {bin_doc.get('bin_id')} needs pickup.</div>
+          </td></tr>
+          <tr><td style="padding:24px 32px">
+            <div style="font-size:15px;line-height:1.6;color:#D6DED8">
+              <b>{bin_doc.get('name')}</b> is at
+              <span style="color:#FF453A;font-weight:700">{bin_doc.get('fill_percent')}% full</span>.
+              Please dispatch a pickup crew.
+            </div>
+            <table cellpadding="8" cellspacing="0" style="margin-top:20px;background:#122419;border-radius:12px;border:1px solid #1B3324;width:100%">
+              <tr><td style="color:#A3B8AA;font-size:12px">LOCATION</td><td style="color:#F9F9F6">{bin_doc.get('name')}</td></tr>
+              <tr><td style="color:#A3B8AA;font-size:12px">GPS</td><td style="color:#F9F9F6;font-family:monospace">{bin_doc.get('lat')}, {bin_doc.get('lng')}</td></tr>
+              <tr><td style="color:#A3B8AA;font-size:12px">FILL</td><td style="color:#FF453A;font-weight:700">{bin_doc.get('fill_percent')}%</td></tr>
+              <tr><td style="color:#A3B8AA;font-size:12px">PELLETS</td><td style="color:#F9F9F6">{bin_doc.get('pellets_kg')} kg ready to dispense</td></tr>
+              <tr><td style="color:#A3B8AA;font-size:12px">BATTERY</td><td style="color:#F9F9F6">{bin_doc.get('battery_percent')}%</td></tr>
+            </table>
+            <div style="margin-top:22px;font-size:13px;color:#A3B8AA">— PETZZY IoT · Feed. Recycle. Repeat.</div>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+    """
+
+@api.post("/admin/alerts/check")
+async def check_bin_alerts(_: dict = Depends(require_admin)):
+    """Scan all bins; for any over threshold that haven't been alerted since last refill, send emails."""
+    bins = await db.bins.find({}, {"_id": 0}).to_list(500)
+    admins = await db.users.find({"role": "admin"}, {"_id": 0, "email": 1}).to_list(500)
+    recipients = list({u["email"] for u in admins if u.get("email")}) + [OPS_EMAIL]
+    recipients = list({r.lower() for r in recipients if r})
+
+    alerted = []
+    skipped = []
+    for b in bins:
+        if b.get("fill_percent", 0) < BIN_FULL_THRESHOLD:
+            continue
+        last_alert_ts = b.get("last_alert_at")
+        last_refill_ts = b.get("last_refilled")
+        # skip if we've already alerted since last refill
+        if last_alert_ts and last_refill_ts and last_alert_ts > last_refill_ts:
+            skipped.append(b["bin_id"])
+            continue
+
+        subject = f"[PETZZY] Bin {b['bin_id']} at {b['fill_percent']}% — dispatch pickup"
+        html = _bin_alert_html(b)
+        results = []
+        for rcpt in recipients:
+            results.append(await send_email(rcpt, subject, html))
+        await db.bins.update_one(
+            {"bin_id": b["bin_id"]},
+            {"$set": {"last_alert_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        alerted.append({"bin_id": b["bin_id"], "recipients": recipients, "results": results})
+
+    return {
+        "threshold_percent": BIN_FULL_THRESHOLD,
+        "recipients": recipients,
+        "alerted": alerted,
+        "skipped_already_alerted": skipped,
+        "email_key_configured": bool(EMERGENT_EMAIL_KEY),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Seeding
 # ---------------------------------------------------------------------------
 CHENNAI_BINS = [
@@ -411,14 +561,58 @@ async def seed_cameras():
     await db.cameras.insert_many(CAMERA_FEEDS)
     logger.info("Seeded %d cameras", len(CAMERA_FEEDS))
 
+SPONSORS_SEED = [
+    {
+        "name": "Ather CSR",
+        "slug": "ather-csr",
+        "tagline": "Cleaner streets, greener rides.",
+        "description": "Ather Energy funds PETZZY bins across South Chennai as part of its urban sustainability CSR pledge — turning food waste into feed while cleaning up neighbourhoods around Ather Grid stations.",
+        "logo_url": "https://images.unsplash.com/photo-1618176976416-a9ce8f0d21e5?w=200",
+        "hero_url": "https://images.unsplash.com/photo-1777571051052-6ad3c7031811?w=1600",
+        "website": "https://atherenergy.com",
+        "bin_ids": ["PZ-004", "PZ-005", "PZ-007"],
+    },
+    {
+        "name": "TVS Motors",
+        "slug": "tvs-motors",
+        "tagline": "Every kilometre, a kindness.",
+        "description": "TVS Motors sponsors PETZZY units around Chennai's central business district and rail hubs, aligned with its Swachh Bharat and animal welfare CSR mandates.",
+        "logo_url": "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=200",
+        "hero_url": "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=1600",
+        "website": "https://tvsmotor.com",
+        "bin_ids": ["PZ-001", "PZ-008", "PZ-009"],
+    },
+    {
+        "name": "TataOne Foundation",
+        "slug": "tataone",
+        "tagline": "Feed the four-legged citizen.",
+        "description": "TataOne Foundation funds coastal PETZZY units — Marina, Besant Nagar and Perambur — combining beach cleanup with humane animal feeding.",
+        "logo_url": "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=200",
+        "hero_url": "https://images.unsplash.com/photo-1721902187342-ab4e59f36d9b?w=1600",
+        "website": "https://tata.com",
+        "bin_ids": ["PZ-002", "PZ-006", "PZ-010"],
+    },
+]
+
+async def seed_sponsors():
+    if await db.sponsors.count_documents({}) > 0:
+        return
+    docs = []
+    for s in SPONSORS_SEED:
+        docs.append({**s, "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.sponsors.insert_many(docs)
+    logger.info("Seeded %d sponsors", len(docs))
+
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("user_id", unique=True)
     await db.bins.create_index("bin_id", unique=True)
+    await db.sponsors.create_index("slug", unique=True)
     await seed_admin()
     await seed_bins()
     await seed_cameras()
+    await seed_sponsors()
 
 @app.on_event("shutdown")
 async def shutdown():

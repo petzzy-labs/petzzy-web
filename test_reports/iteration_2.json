@@ -1,0 +1,88 @@
+{
+  "summary": "Tested sponsor APIs/UI, public map, admin alert flow, sponsor CRUD/RBAC, admin bins/users/refill/XLSX regressions, and required auth security checks. Core requested features work, but 3 of 15 backend tests fail (90% boundary, wildcard credentialed CORS, no brute-force lockout). Frontend desktop flows pass; mobile navigation/overflow and a misleading alert toast remain.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "No brute-force lockout: six consecutive invalid admin logins all return 401; the sixth should be rate-limited/locked with 429 after five failures.",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "/api/",
+        "issue": "Credentialed CORS allows an arbitrary Origin and returns Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true instead of an explicit allowlist.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/admin/alerts/check",
+        "issue": "A bin at exactly 90.0% is alerted even though the requirement and Admin label say over/exceeds 90%; reproduced with PZ-010 and restored its original document afterward."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Navbar",
+        "issue": "At 390px, nav-map and nav-sponsors are hidden and there is no mobile menu, so the new public pages are not discoverable from navigation.",
+        "selector": "[data-testid='nav-map'], [data-testid='nav-sponsors']",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Navbar",
+        "issue": "Mobile header is 416px wide in a 390px viewport; the Register button ends at x=415.84 and is clipped, causing horizontal overflow.",
+        "selector": "[data-testid='nav-register']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin Run Alerts",
+        "issue": "When the API returns alerted=[] and skipped_already_alerted=['PZ-006'], the UI says 'No bins over 90% right now. All calm.' even though a 91% bin exists and was only skipped because it was already alerted.",
+        "affected_selectors": ["[data-testid='admin-run-alerts']", "[data-sonner-toast]"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Mobile navbar",
+        "issues": [
+          "No compact/hamburger navigation for Map and Sponsors below the md breakpoint.",
+          "Brand chip plus auth controls exceed viewport width and clip the Register CTA."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Change alert threshold logic so exactly 90% is not treated as over 90% (use <= in the skip condition, or clarify requirement/UI if >=90 is intended).",
+    "Add failed-login tracking/rate limiting and return 429 after five failed attempts.",
+    "Configure explicit allowed CORS origins; do not combine wildcard origin with credentialed requests.",
+    "Make the Run Alerts toast distinguish skipped/already-alerted bins from truly having no bins over 90%.",
+    "Add mobile navigation for Live Map and Sponsors and make header controls fit within 390px.",
+    "Only persist last_alert_at when at least one production email send succeeds, or persist failure state and support retry."
+  ],
+  "critical_code_review_comments": [
+    "server.py line 423 uses fill_percent < 90, which includes exactly 90 despite the >90 contract.",
+    "server.py lines 437-440 set last_alert_at even if every send_email result is failed, which would suppress retries after a production email outage.",
+    "server.py CORS middleware uses CORS_ORIGINS='*' with allow_credentials=True; use an explicit environment-provided origin list.",
+    "Login has no attempt counter, cooldown, or rate limiter.",
+    "Admin.jsx derives the alert toast only from alerted.length and ignores skipped_already_alerted, producing a false all-clear.",
+    "PublicMap.jsx and Sponsors.jsx silently swallow API failures and provide no loading/error state, leaving an unexplained empty page on backend failure."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/iteration_2.json"
+  ],
+  "success_rate": {
+    "backend": "80% (12/15)",
+    "frontend": "85%"
+  },
+  "seed_data_creation": "Created temporary sponsor petzzy-manage and deleted it; temporarily set PZ-010 to 90% for boundary testing and restored the original document. Alert checks updated alert timestamps as designed; refill regression reset PZ-001 to 5% fill and 20 kg pellets.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Desktop /map renders 10 markers and 10 public-bin cards; /sponsors renders 3 cards; Ather detail renders 3 bins and 4 impact cards. Admin alerts, tabs, XLSX, and refill integrations pass. Auth cookie is HttpOnly+Secure, bcrypt starts with $2b$, and seed_admin code updates a changed password. Re-test the three backend failures plus mobile navbar and skipped-alert toast after fixes.",
+  "rca_of_the_issue": "Threshold mismatch is an incorrect comparison (< instead of <=). The false alert toast ignores skipped_already_alerted. Mobile defects come from hidden md:flex nav without a mobile alternative and a fixed-content header that exceeds 390px. Auth security failures stem from wildcard CORS configuration and absent failed-login state/rate limiting."
+}

@@ -9,6 +9,9 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import AuthCallback from "./pages/AuthCallback";
+import PublicMap from "./pages/PublicMap";
+import Sponsors from "./pages/Sponsors";
+import SponsorDetail from "./pages/SponsorDetail";
 
 function AppRouter() {
   const location = useLocation();
@@ -25,6 +28,9 @@ function AppRouter() {
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/map" element={<PublicMap />} />
+      <Route path="/sponsors" element={<Sponsors />} />
+      <Route path="/sponsors/:slug" element={<SponsorDetail />} />
       <Route path="*" element={<Landing />} />
     </Routes>
   );

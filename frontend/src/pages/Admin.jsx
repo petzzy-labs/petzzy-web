@@ -4,7 +4,7 @@ import { api, API_BASE } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { Navigate } from "react-router-dom";
 import { toast, Toaster } from "sonner";
-import { Download, RefreshCw, Users, Trash2, ShieldCheck, BatteryCharging } from "lucide-react";
+import { Download, RefreshCw, Users, Trash2, ShieldCheck, BatteryCharging, Bell } from "lucide-react";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -57,6 +57,18 @@ export default function Admin() {
     }
   };
 
+  const runAlerts = async () => {
+    try {
+      const { data } = await api.post("/admin/alerts/check");
+      const count = data.alerted?.length || 0;
+      const sim = !data.email_key_configured;
+      if (count === 0) toast.info("No bins over 90% right now. All calm.");
+      else toast.success(`${count} bin alert(s) ${sim ? "SIMULATED (add EMERGENT_EMAIL_KEY to .env)" : "sent"} to ${data.recipients.join(", ")}`);
+    } catch (e) {
+      toast.error("Alert check failed");
+    }
+  };
+
   if (user === undefined) return <div className="pz-hero-bg min-h-screen" />;
   if (user === null || user.role !== "admin") return <Navigate to="/login" replace />;
 
@@ -73,7 +85,10 @@ export default function Admin() {
             </h1>
             <p className="mt-2 text-neutral-400">Fleet health, roster of signups, and Excel exports for CSR reports.</p>
           </div>
-          <button data-testid="admin-refresh" onClick={loadAll} className="pz-btn-ghost flex items-center gap-2 text-sm"><RefreshCw size={14} /> Refresh</button>
+          <div className="flex gap-2">
+            <button data-testid="admin-run-alerts" onClick={runAlerts} className="pz-btn-ghost flex items-center gap-2 text-sm"><Bell size={14} /> Run Alerts (&gt;90%)</button>
+            <button data-testid="admin-refresh" onClick={loadAll} className="pz-btn-ghost flex items-center gap-2 text-sm"><RefreshCw size={14} /> Refresh</button>
+          </div>
         </div>
 
         <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">

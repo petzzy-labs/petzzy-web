@@ -34,8 +34,9 @@ export const Navbar = () => {
         <nav className="hidden md:flex items-center gap-8">
           <NavLink to="/" label="Home" testId="nav-home" />
           <NavLink to="/about" label="About Us" testId="nav-about" />
+          <NavLink to="/map" label="Live Map" testId="nav-map" />
+          <NavLink to="/sponsors" label="Sponsors" testId="nav-sponsors" />
           <a href="/#tech" data-testid="nav-tech" className="text-sm text-neutral-300 hover:text-[#90EE90]">Tech</a>
-          <a href="/#contact" data-testid="nav-contact" className="text-sm text-neutral-300 hover:text-[#90EE90]">Contact</a>
         </nav>
 
         <div className="flex items-center gap-2.5">
