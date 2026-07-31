@@ -9,17 +9,29 @@ const HERO_IMG = "https://images.unsplash.com/photo-1721902187342-ab4e59f36d9b?c
 
 export default function Donate() {
   const [packages, setPackages] = useState([]);
+  const [pkgState, setPkgState] = useState("loading"); // loading | ok | error
   const [stats, setStats] = useState({ donations_count: 0, total_amount: 0, total_pellets_kg: 0 });
   const [selected, setSelected] = useState("pellet_5kg");
   const [donor, setDonor] = useState({ name: "", email: "" });
   const [busy, setBusy] = useState(false);
 
-  React.useEffect(() => {
-    api.get("/donations/packages").then((r) => setPackages(r.data)).catch(() => {});
-    api.get("/donations/stats").then((r) => setStats(r.data)).catch(() => {});
+  const loadPackages = React.useCallback(() => {
+    setPkgState("loading");
+    api.get("/donations/packages")
+      .then((r) => { setPackages(r.data); setPkgState("ok"); })
+      .catch(() => { setPackages([]); setPkgState("error"); });
   }, []);
 
+  React.useEffect(() => {
+    loadPackages();
+    api.get("/donations/stats").then((r) => setStats(r.data)).catch(() => {});
+  }, [loadPackages]);
+
   const handleDonate = async () => {
+    if (pkgState !== "ok" || !packages.length) {
+      toast.error("Donation packages could not be loaded. Please retry.");
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.post("/donations/checkout", {
@@ -57,7 +69,23 @@ export default function Donate() {
           </p>
 
           <StaggerList className="mt-8 grid sm:grid-cols-2 gap-4" gap={0.08} testId="donate-packages" immediate>
-            {packages.map((p, i) => (
+            {pkgState === "loading" && Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} data-testid="donate-pkg-skeleton" className="pz-card p-6 animate-pulse">
+                <div className="h-3 w-24 bg-[#1B3324] rounded" />
+                <div className="mt-4 h-8 w-32 bg-[#1B3324] rounded" />
+                <div className="mt-2 h-3 w-40 bg-[#1B3324] rounded" />
+              </div>
+            ))}
+            {pkgState === "error" && (
+              <div className="pz-card p-6 sm:col-span-2 flex items-center justify-between" data-testid="donate-pkg-error">
+                <div>
+                  <div className="text-[#FF453A] font-semibold">Couldn't load donation packages.</div>
+                  <div className="text-neutral-400 text-sm mt-1">Please retry or come back in a moment.</div>
+                </div>
+                <button onClick={loadPackages} className="pz-btn-ghost" data-testid="donate-pkg-retry">Retry</button>
+              </div>
+            )}
+            {pkgState === "ok" && packages.map((p, i) => (
               <StaggerItem
                 key={p.package_id}
                 i={i}
@@ -93,9 +121,9 @@ export default function Donate() {
 
           <button
             onClick={handleDonate}
-            disabled={busy}
+            disabled={busy || pkgState !== "ok"}
             data-testid="donate-checkout"
-            className="mt-6 pz-btn-primary w-full sm:w-auto flex items-center justify-center gap-2 disabled:opacity-60"
+            className="mt-6 pz-btn-primary w-full sm:w-auto flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {busy ? <><Loader2 className="animate-spin" size={16} /> Redirecting to Stripe...</> : <>Continue to Stripe <ChevronRight size={18} /></>}
           </button>

@@ -55,6 +55,24 @@ export const StaggerItem = ({ children, className = "", i = 0, variants = fadeUp
 );
 
 /**
+ * StaggerItemHoverable - stagger reveal + whileHover lift (2px up, greener border).
+ * Use this in feature grids so Framer Motion owns the transform and CSS hover can't lose the fight.
+ */
+export const StaggerItemHoverable = ({ children, className = "", i = 0, variants = fadeUp, ...rest }) => (
+  <motion.div
+    variants={variants}
+    custom={i}
+    className={className}
+    whileHover={{ y: -2, borderColor: "rgba(144,238,144,0.30)" }}
+    whileTap={{ scale: 0.97 }}
+    transition={{ type: "tween", duration: 0.2 }}
+    {...rest}
+  >
+    {children}
+  </motion.div>
+);
+
+/**
  * RevealImage - image scales from 105% -> 100% + fades in as it enters viewport.
  * Re-triggers each time it enters the viewport (scroll up too).
  */

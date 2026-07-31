@@ -19,8 +19,10 @@ const Feature = ({ Icon, title, desc, testId, i = 0 }) => (
   <StaggerItem
     i={i}
     variants={featureFadeUp}
-    className="pz-card pz-card-hoverable p-7 relative overflow-hidden group cursor-default"
+    className="pz-card p-7 relative overflow-hidden group cursor-default"
     data-testid={testId}
+    whileHover={{ y: -2, borderColor: "rgba(144,238,144,0.30)" }}
+    transition={{ type: "tween", duration: 0.2 }}
   >
     <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-[#90EE90]/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
     <div className="w-11 h-11 rounded-2xl bg-[#1B3324] flex items-center justify-center text-[#90EE90] border border-[#264A34] group-hover:scale-110 group-hover:bg-[#264A34] transition-all duration-300">
