@@ -1,0 +1,35 @@
+{
+  "summary": "Backend fully working (public endpoints, auth, admin, xlsx export, admin refill, 403 for non-admin). Landing/About/Login/Admin portal/Auth persistence/Logout all working end-to-end via UI. HIGH severity blocker: Dashboard page crashes with Leaflet 'Map container is already initialized' runtime error (React 19 StrictMode double-mount) — bin-map, bin-card-*, camera-CAM-* are never rendered.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/stats 200 (total_bins=10, users_count=2)",
+    "GET /api/bins 200 (10 Chennai bins seeded)",
+    "GET /api/cameras 200 (CAM-01..CAM-04 seeded)",
+    "POST /api/auth/login admin — returns JWT token",
+    "GET /api/auth/me 200 with Bearer token",
+    "GET /api/admin/users 200 admin; 403 for regular user (RBAC works)",
+    "GET /api/admin/users/export 200 — 5185-byte xlsx returned",
+    "POST /api/admin/bins/PZ-001/refill 200 with {pellets_added_kg:20}",
+    "Landing: nav-logo, hero-get-started, hero-learn-more, stat-bins-live=10, stat-fed-today=187 all visible",
+    "About page: about-card-0 and about-card-3 visible after nav-about click",
+    "Login as admin -> redirects to /admin; admin-tab-bins, admin-tab-users, admin-refill-PZ-001, admin-export-excel all present",
+    "login-google-btn present on Login page",
+    "Auth persistence: page refresh keeps user on /admin (JWT persisted)",
+    "nav-logout clears session and redirects to /login",
+    "Login as test@petzzy.com -> redirects to /dashboard URL (page then crashes)"
+  ],
+  "failed": [
+    {
+      "area": "frontend/Dashboard",
+      "issue": "Uncaught runtime error: 'Map container is already initialized.' from react-leaflet. Dashboard renders overlay error and 0 markers, no bin-map, no bin-card-*, no camera-CAM-* elements visible.",
+      "evidence": "leaflet-marker-count=0; bin-map=False; bin-card-PZ-001=False; camera-CAM-01..04=False. Screenshot shows CRA error overlay: 'Map container is already initialized' at NewClass._initContainer -> reappearLayoutEffects (React 19 StrictMode double-invoke of MapContainer).",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Fix Dashboard Leaflet mount issue. Common fixes: (a) give <MapContainer> a stable `key` and wrap in a component that mounts once, (b) disable React.StrictMode in src/index.js for now, or (c) use useRef + effect cleanup to destroy the map instance on unmount. react-leaflet 4.2.1 has known StrictMode double-mount issues on React 19 — consider react-leaflet@^5 (React 19 compatible) or the workaround pattern of rendering MapContainer only after a mounted flag flips true in useEffect."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "80%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}
