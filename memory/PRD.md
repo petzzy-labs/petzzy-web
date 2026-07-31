@@ -23,6 +23,14 @@ Full-stack Petzzy web app: puppies imagery, brand color #90EE90, PETZZY tagline,
 - Auth persistence + logout
 - Google Auth callback flow (`#session_id` handled in AppRouter)
 
+## What's Implemented (v2 — Feb 2026)
+- **Public Live Map** at `/map` (unauth) — Leaflet OSM, 10 Chennai bins with color-coded status, "Directions" links to Google Maps
+- **CSR Sponsor Pages** — `/sponsors` list + `/sponsors/:slug` detail with hero image, description, funded-bins map, live impact stats (bins funded, waste recycled, pellets ready, animals fed/month). 3 seeded sponsors (Ather CSR, TVS Motors, TataOne)
+- Admin can create/delete sponsors via `POST/DELETE /api/admin/sponsors`
+- **Bin Alerts** via Emergent-managed Resend (`POST /api/admin/alerts/check`) — sends styled HTML email to `OPS_EMAIL` + every admin user for bins > 90%. Idempotent: won't re-alert until bin is refilled. **Simulated when `EMERGENT_EMAIL_KEY` is empty in `.env`** (returns `email_key_configured: false`, logs to console)
+- Admin portal: **Run Alerts (>90%)** button + smarter toast that distinguishes new alerts vs already-alerted-skipped bins
+- **Mobile navbar** with hamburger menu (no more nav-map/nav-sponsors hidden on small screens)
+
 ## Test Credentials
 - Admin: admin@petzzy.com / petzzyadmin123
 - User: test@petzzy.com / test1234

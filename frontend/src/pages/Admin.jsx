@@ -61,9 +61,15 @@ export default function Admin() {
     try {
       const { data } = await api.post("/admin/alerts/check");
       const count = data.alerted?.length || 0;
+      const skipped = data.skipped_already_alerted?.length || 0;
       const sim = !data.email_key_configured;
-      if (count === 0) toast.info("No bins over 90% right now. All calm.");
-      else toast.success(`${count} bin alert(s) ${sim ? "SIMULATED (add EMERGENT_EMAIL_KEY to .env)" : "sent"} to ${data.recipients.join(", ")}`);
+      if (count === 0 && skipped === 0) {
+        toast.info("No bins over 90% right now. All calm.");
+      } else if (count === 0 && skipped > 0) {
+        toast.info(`${skipped} bin(s) over 90% already alerted since last refill.`);
+      } else {
+        toast.success(`${count} new alert(s) ${sim ? "SIMULATED (set EMERGENT_EMAIL_KEY)" : "sent"} to ${data.recipients.join(", ")}${skipped ? ` · ${skipped} already-alerted skipped` : ""}`);
+      }
     } catch (e) {
       toast.error("Alert check failed");
     }

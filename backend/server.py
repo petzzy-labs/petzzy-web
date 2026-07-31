@@ -420,7 +420,7 @@ async def check_bin_alerts(_: dict = Depends(require_admin)):
     alerted = []
     skipped = []
     for b in bins:
-        if b.get("fill_percent", 0) < BIN_FULL_THRESHOLD:
+        if b.get("fill_percent", 0) <= BIN_FULL_THRESHOLD:
             continue
         last_alert_ts = b.get("last_alert_at")
         last_refill_ts = b.get("last_refilled")
