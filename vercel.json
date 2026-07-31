@@ -3,9 +3,9 @@
     "frontend": {
       "root": "frontend"
     },
-    "backend": {
+  "backend": {
       "root": "backend",
-      "entrypoint": "main:app"
+      "entrypoint": "server:app"
     }
   },
   "rewrites": [
